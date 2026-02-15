@@ -1,0 +1,438 @@
+{
+	"info": {
+		"_postman_id": "fuel-route-optimizer-v1",
+		"name": "Fuel Route Optimizer API",
+		"description": "API collection for testing the Fuel Route Optimizer.\n\nSetup:\n1. Start services: `make up`\n2. Import fuel data: `make import-data`\n3. Set the `base_url` variable if not using localhost:8000",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/health/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "health", ""]
+						},
+						"description": "Verify the API and database are running."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has ok status', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('ok');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Route Optimization",
+			"item": [
+				{
+					"name": "Short Route (NY to Philadelphia)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"start\": \"New York, NY\",\n    \"finish\": \"Philadelphia, PA\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Short route (~95 miles). Should require 0 fuel stops since it's within the 500-mile tank range."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has required structure', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('route');",
+									"    pm.expect(jsonData).to.have.property('fuel_stops');",
+									"    pm.expect(jsonData).to.have.property('summary');",
+									"    pm.expect(jsonData.route).to.have.property('distance_miles');",
+									"    pm.expect(jsonData.route).to.have.property('duration_hours');",
+									"    pm.expect(jsonData.route).to.have.property('map_url');",
+									"    pm.expect(jsonData.route).to.have.property('geometry');",
+									"});",
+									"",
+									"pm.test('Summary has all fields', function () {",
+									"    var summary = pm.response.json().summary;",
+									"    pm.expect(summary).to.have.property('total_fuel_cost');",
+									"    pm.expect(summary).to.have.property('total_gallons');",
+									"    pm.expect(summary).to.have.property('number_of_stops');",
+									"    pm.expect(summary).to.have.property('routes_evaluated');",
+									"    pm.expect(summary).to.have.property('mpg');",
+									"    pm.expect(summary).to.have.property('vehicle_range_miles');",
+									"    pm.expect(summary.mpg).to.eql(10);",
+									"    pm.expect(summary.vehicle_range_miles).to.eql(500);",
+									"});",
+									"",
+									"pm.test('Short route needs 0 fuel stops', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.summary.number_of_stops).to.eql(0);",
+									"    pm.expect(jsonData.fuel_stops).to.have.length(0);",
+									"    pm.expect(jsonData.summary.total_fuel_cost).to.eql(0);",
+									"});",
+									"",
+									"pm.test('Map URL is valid', function () {",
+									"    var mapUrl = pm.response.json().route.map_url;",
+									"    pm.expect(mapUrl).to.include('maps.openrouteservice.org');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Medium Route (NY to Columbus, OH)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"start\": \"New York, NY\",\n    \"finish\": \"Columbus, OH\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Medium route (~540 miles). Should require 1 fuel stop."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Medium route requires at least 1 stop', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.summary.number_of_stops).to.be.at.least(1);",
+									"});",
+									"",
+									"pm.test('Fuel stops have required fields', function () {",
+									"    var stops = pm.response.json().fuel_stops;",
+									"    if (stops.length > 0) {",
+									"        var stop = stops[0];",
+									"        pm.expect(stop).to.have.property('name');",
+									"        pm.expect(stop).to.have.property('address');",
+									"        pm.expect(stop).to.have.property('city');",
+									"        pm.expect(stop).to.have.property('state');",
+									"        pm.expect(stop).to.have.property('latitude');",
+									"        pm.expect(stop).to.have.property('longitude');",
+									"        pm.expect(stop).to.have.property('price_per_gallon');",
+									"        pm.expect(stop).to.have.property('gallons_filled');",
+									"        pm.expect(stop).to.have.property('cost');",
+									"        pm.expect(stop).to.have.property('distance_from_start_miles');",
+									"    }",
+									"});",
+									"",
+									"pm.test('Total fuel cost is positive', function () {",
+									"    pm.expect(pm.response.json().summary.total_fuel_cost).to.be.above(0);",
+									"});",
+									"",
+									"pm.test('Gallons match distance / mpg minus initial tank', function () {",
+									"    var data = pm.response.json();",
+									"    var expectedGallons = (data.route.distance_miles / data.summary.mpg) - 50;",
+									"    // Allow tolerance because optimal algorithm may leave fuel in tank",
+									"    pm.expect(data.summary.total_gallons).to.be.at.least(expectedGallons * 0.8);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Long Route (Seattle to Miami)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"start\": \"Seattle, WA\",\n    \"finish\": \"Miami, FL\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Cross-country route (~3,300 miles). Should require 5-7 fuel stops."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Cross-country route has multiple stops', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.summary.number_of_stops).to.be.at.least(4);",
+									"});",
+									"",
+									"pm.test('Fuel stops are ordered by distance', function () {",
+									"    var stops = pm.response.json().fuel_stops;",
+									"    for (var i = 1; i < stops.length; i++) {",
+									"        pm.expect(stops[i].distance_from_start_miles)",
+									"            .to.be.at.least(stops[i-1].distance_from_start_miles);",
+									"    }",
+									"});",
+									"",
+									"pm.test('No micro-fills (each stop >= 1 gallon)', function () {",
+									"    var stops = pm.response.json().fuel_stops;",
+									"    stops.forEach(function(stop) {",
+									"        pm.expect(stop.gallons_filled).to.be.at.least(1);",
+									"    });",
+									"});",
+									"",
+									"pm.test('Each stop cost = gallons * price', function () {",
+									"    var stops = pm.response.json().fuel_stops;",
+									"    stops.forEach(function(stop) {",
+									"        var expected = stop.gallons_filled * stop.price_per_gallon;",
+									"        pm.expect(stop.cost).to.be.closeTo(expected, 0.02);",
+									"    });",
+									"});",
+									"",
+									"pm.test('Total cost = sum of stop costs', function () {",
+									"    var data = pm.response.json();",
+									"    var sumCost = data.fuel_stops.reduce(function(sum, s) { return sum + s.cost; }, 0);",
+									"    pm.expect(data.summary.total_fuel_cost).to.be.closeTo(sumCost, 0.1);",
+									"});",
+									"",
+									"pm.test('Routes evaluated >= 1', function () {",
+									"    pm.expect(pm.response.json().summary.routes_evaluated).to.be.at.least(1);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Short Route with Alternatives (Princeton to Trenton)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"start\": \"Princeton, NJ\",\n    \"finish\": \"Trenton, NJ\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Very short route (~12 miles, under ORS 100km limit). Should trigger alternative route evaluation (routes_evaluated > 1)."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Multiple alternative routes evaluated', function () {",
+									"    // ORS returns up to 3 alternatives for routes under ~100 km",
+									"    pm.expect(pm.response.json().summary.routes_evaluated).to.be.at.least(2);",
+									"});",
+									"",
+									"pm.test('Very short route needs 0 fuel stops', function () {",
+									"    pm.expect(pm.response.json().summary.number_of_stops).to.eql(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Error Cases",
+			"item": [
+				{
+					"name": "Missing Fields (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"start\": \"New York, NY\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Missing 'finish' field. Should return 400."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Empty Body (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Empty request body. Should return 400."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Invalid Location (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"start\": \"Faketown, XX\",\n    \"finish\": \"Nowhere, YY\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/route/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "route", ""]
+						},
+						"description": "Invalid location names. Should return 400 with GEOCODING_FAILED."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('Error code is GEOCODING_FAILED', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.error.code).to.eql('GEOCODING_FAILED');",
+									"    pm.expect(jsonData.error).to.have.property('message');",
+									"    pm.expect(jsonData.error).to.have.property('details');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}
